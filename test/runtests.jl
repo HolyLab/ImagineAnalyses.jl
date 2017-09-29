@@ -1,4 +1,4 @@
-using ImagineBenchmarks
+using ImagineAnalyses
 using Base.Test
 
 # write your own tests here

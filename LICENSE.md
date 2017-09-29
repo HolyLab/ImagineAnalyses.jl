@@ -1,4 +1,4 @@
-The ImagineBenchmarks.jl package is licensed under the MIT "Expat" License:
+The ImagineAnalyses.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2017: Cody.
 >
