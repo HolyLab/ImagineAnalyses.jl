@@ -1,13 +1,15 @@
 module ImagineAnalyses
 
+using AxisArrays, Interpolations
 using Reexport
-
 @reexport using CachedCalls, ImagineInterface
 
 import ImagineInterface.HasTimeUnits
 import CachedCalls.CachedCall
 
-export dumb_bench
+export dumb_bench,
+        get_cycles,
+        largest_cycle_diff
 
 #This will be a bit of a hodgepodge of analyses one can do on ImagineSignals and acquired images.  May be worth organizing differently if it gets too big.
 
@@ -16,6 +18,8 @@ dumb_bench(sig1::ImagineSignal, sig2::ImagineSignal) = 0.0
 
 #Define new constructors for CachedCalls on a per-function basis when the return type is known (warning: risky when function isn't type stable)
 CachedCall(f::typeof(dumb_bench), args...) = CachedCall("dumb benchmark", f, (args...), Float64)
+
+include("consistency.jl")
 
 #To implement:
 
