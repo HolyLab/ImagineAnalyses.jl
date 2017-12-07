@@ -2,9 +2,9 @@ module ImagineAnalyses
 
 using AxisArrays, Interpolations
 using Reexport
-@reexport using CachedCalls, ImagineInterface
+@reexport using CachedCalls, ImagineInterface, UnitAliases
 
-import ImagineInterface.HasTimeUnits
+import UnitAliases.HasTimeUnits
 import CachedCalls.CachedCall
 
 export dumb_bench,
