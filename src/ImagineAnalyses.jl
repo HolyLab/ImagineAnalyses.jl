@@ -9,7 +9,10 @@ import CachedCalls.CachedCall
 
 export dumb_bench,
         get_cycles,
-        largest_cycle_diff
+        largest_cycle_diff,
+
+        find_circular,
+        get_circular
 
 #This will be a bit of a hodgepodge of analyses one can do on ImagineSignals and acquired images.  May be worth organizing differently if it gets too big.
 
@@ -20,6 +23,7 @@ dumb_bench(sig1::ImagineSignal, sig2::ImagineSignal) = 0.0
 CachedCall(f::typeof(dumb_bench), args...) = CachedCall("dumb benchmark", f, (args...), Float64)
 
 include("consistency.jl")
+include("exposure_placement.jl")
 
 #To implement:
 
