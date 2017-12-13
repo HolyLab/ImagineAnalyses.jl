@@ -89,18 +89,26 @@ cyc_vec1 = reshape(cyc_mat1, (ncycs * length(cyc),))
 cyc_vec2 = reshape(cyc_mat2, (ncycs * length(cyc),))
 @test all(largest_cycle_diff(cyc_vec1, 10).==0.0)
 @test all(largest_cycle_diff(cyc_vec2, 10).==1.0)
-@test all(largest_cycle_diff(cyc_vec2, 10; ignore_n=3).==0.0) #ignore first 3
+@test all(largest_cycle_diff(cyc_vec2, 10; ignore_ncycs=3).==0.0) #ignore first 3
 
 #AxisArray
 cyc_vec2_aa = AxisArray(cyc_vec2, Axis{:time}(linspace(1.0s, ncycs * 10.0s, ncycs*length(cyc))))
 @test all(largest_cycle_diff(cyc_vec2_aa, 10.0s).==1.0)
-@test all(largest_cycle_diff(cyc_vec2_aa, 10.0s; ignore_n=3).==0.0) #ignore first 3
+@test all(largest_cycle_diff(cyc_vec2_aa, 10.0s; ignore_ncycs=3).==0.0) #ignore first 3
 
 #ImagineSignal
 ocpi2 = rigtemplate("ocpi-2"; sample_rate=1*inv(Unitful.s))
 pos = first(getpositioners(ocpi2))
 append!(pos, "test", cyc_vec2*Unitful.μm)
 myapprox = (x,y)->isapprox(ustrip(x),ustrip(y); rtol=sqrt(1/typemax(Int16))) #account for Int16-limited encoding of piezo signal
-samps_vec = get_samples(pos)
 @test all(map(x->myapprox(x,1.0μm),  largest_cycle_diff(pos, 10.0s)))
-@test all(map(x->myapprox(x,0.0μm),  largest_cycle_diff(pos, 10.0s; ignore_n=3)))
+@test all(map(x->myapprox(x,0.0μm),  largest_cycle_diff(pos, 10.0s; ignore_ncycs=3)))
+
+samps_vec = get_samples(pos)
+ocpi2 = rigtemplate("ocpi-2"; sample_rate=1*inv(Unitful.s))
+pos = first(getpositioners(ocpi2))
+samps_vec = vcat(fill(0.0*Unitful.μm, 111), samps_vec)
+append!(pos, "test", samps_vec)
+@test all(map(x->myapprox(x,1.0μm),  largest_cycle_diff(pos, 10.0s, 111))) #111 sample delay period
+@test all(map(x->myapprox(x,1.0μm),  largest_cycle_diff(pos, 10.0s, 111/samprate(pos)))) #time units
+

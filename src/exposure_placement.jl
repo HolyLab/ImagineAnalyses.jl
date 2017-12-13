@@ -50,7 +50,10 @@ function find_circular(samps::AbstractVector, circ_list::AbstractVector, pad_nsa
             end
         end
     end
-    return reversed ? reverse(outputs) : outputs
+    if reversed
+        outputs = reverse(outputs)
+    end
+    return outputs
 end
 
 #Returns a vector that is the mean of each cycle in "samps" beginning at start_idx
@@ -71,41 +74,52 @@ function mean_cycle(samps::AbstractVector, nsamps_cycle::Int; start_idx = 1)
     return reshape(mean(ustrip.(cyc_mat), 2), nsamps_cycle)  * unit(samps[1]) #work around limitation of mean function with Unitful Quantities
 end
 
-#find shift to align mod and mon.  (Even with calibration there is often a phase delay between the MOD and MON signal)
+#find integer sample shift to align mod and mon.  (Even with calibration there is often a phase delay between the MOD and MON signal)
 #We do this so that we know when the MON signal reaches its minimum
 #indmax(xcorr(a,b)) is displaced from the center of the xcorr vector by the amount that b would need to be shifted to align with a
 function mon_delay(mod_cyc, mon_cyc)
-    xc = xcorr(mon_cyc, mod_cyc)
+    xc = xcorr(ustrip.(mon_cyc), ustrip.(mod_cyc))
     ctr_i = div(length(xc),2)+1
     return indmax(xc) - ctr_i #amount that mod_cyc needs to be shifted to align with mon_cyc (should be positive)
 end
 
-#takes the mean of all cycles contained in sig, beginning with start_idx (can skip some samples in the beginning for warmup)
-#Then after taking the mean, returns a set of indices marking when the mean signal crosses the values in the crossings vector.
+#Returns a set of indices marking when the mon signal crosses the values in the crossings vector.
 #Useful for deciding when to time camera exposures / laser pulses
 #note: if calibration is needed it must be done before calling this function. i.e. sig should be calibrated already
 function pulse_timings(mod_cyc::AbstractVector, mon_cyc::AbstractVector, targets::AbstractVector, pad_nsamps::Int)
     @assert length(mod_cyc) == length(mon_cyc)
     nsamps_cycle = length(mod_cyc)
-    shft = mon_delay(mod_cyc, mod_cyc)
-    mon_aligned = circshift(mon_cyc, -shift)
-    idxs_temp = find_circular(mon_aligned, targets, pad_nsamps)
-    @assert all(map(length, idxs_temp).==2) #should have exactly two crossings for each target with a cyclical waveform
-    mon_idxs = idxs_temp .+ shift
-    nover = length(find(x->x>nsamps_cycle, mon_idxs))
+    shft = mon_delay(ustrip.(mod_cyc), ustrip.(mon_cyc))
+    mon_aligned = circshift(mon_cyc, -shft)
+    mon_idxs = find_circular(mon_aligned, targets, pad_nsamps)
+    @assert all(map(length, mon_idxs).==2) #should have exactly two crossings for each target with a cyclical waveform
+    for i = 1:length(mon_idxs)
+        mon_idxs[i] .+= shft
+    end
+    nover = length(find(x->x>nsamps_cycle, mon_idxs[1]))
+    nover += length(find(x->x>nsamps_cycle, mon_idxs[2]))
     if nover >0
         error("TODO: handle this situation")
     end
     return mon_idxs
 end
 
-function cam_flash_cycs(mod_cyc, mon_cyc, slize_zs, pad_nsamps::Int, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits)
+function flash_cam_cycs(mod_cyc::AbstractVector, mon_cyc::AbstractVector, slice_zs, pad_nsamps::Int, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits; is_bidi = true)
     @assert flash_time <= exp_time
     flash_ctr_is = pulse_timings(mod_cyc, mon_cyc, slice_zs, pad_nsamps)
     flash_ctr_fwd = [x[1] for x in flash_ctr_is]
-    flash_ctr_back = [x[2] for x in flash_ctr_is]
+    flash_ctr_back = reverse([x[2] for x in flash_ctr_is]) #reversed so that corresponding z locations line up
+    if is_bidi
+        flash_ctr_is = vcat(flash_ctr_fwd, flash_ctr_back)
+    else
+        flash_ctr_is = flash_ctr_fwd
+    end
+    flash_cam_cycs(flash_ctr_is, flash_time, exp_time, sample_rate, length(mon_cyc))
+end
+
+function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits, nsamps_cyc::Int)
     #@assert all(map((x,y) -> isapprox(x, y, rtol = (1/typemax(Int16) * 800μm)), (mean_cyc[flash_ctr_fwd], mean_cyc[flash_ctr_back])))
-    min_flash_sep = min(minimum(diff(flash_ctr_fwd)), minimum(diff(reverse(flash_ctr_back))))
+    min_flash_sep = minimum(diff(flash_ctr_is))
     max_exp_time = ((min_flash_sep-1) / sample_rate) * 0.97
     #@show max_exp_time = (1/stack_rate - (1/samprate(pos) *length(slice_zs))) / length(slice_zs) #leaves one low sample between exposure pulses
     if exp_time >= max_exp_time
@@ -115,18 +129,15 @@ function cam_flash_cycs(mod_cyc, mon_cyc, slize_zs, pad_nsamps::Int, flash_time:
     #now place flashes, centered on the indices above
     nsamps_flash = ImagineInterface.calc_num_samps(flash_time, sample_rate)
     if iseven(nsamps_flash)
-	nsamps_flash -= 1 #force odd so that fwd and reverse flashes line up
+	nsamps_flash -= 1 #force odd so that fwd and reverse flashes line up in bidi recordings
     end
     nsamps_from_ctr = div(nsamps_flash,2)
-    flash_ivs_fwd = map(x-> ClosedInterval(x-nsamps_from_ctr, x+nsamps_from_ctr), flash_ctr_fwd)
-    flash_ivs_back = map(x-> ClosedInterval(x-nsamps_from_ctr, x+nsamps_from_ctr), flash_ctr_back)
+    flash_ivs = map(x-> ClosedInterval(x-nsamps_from_ctr, x+nsamps_from_ctr), flash_ctr_is)
     #now place exposures, aligning exposure ends with flash ends
     nsamps_exp = ImagineInterface.calc_num_samps(exp_time, sample_rate)
-    exp_ivs_fwd = map(x-> ClosedInterval(x+nsamps_from_ctr-nsamps_exp-1, x+nsamps_from_ctr), flash_ctr_fwd)
-    exp_ivs_back = map(x-> ClosedInterval(x+nsamps_from_ctr-nsamps_exp-1, x+nsamps_from_ctr), flash_ctr_back)
-
-    flash_cyc = ImagineInterface.gen_pulses(nsamps_cycle, vcat(flash_ivs_fwd, reverse(flash_ivs_back)))
-    cam_cyc = ImagineInterface.gen_pulses(nsamps_cycle, vcat(exp_ivs_fwd, reverse(exp_ivs_back)))
+    exp_ivs= map(x-> ClosedInterval(x+nsamps_from_ctr-nsamps_exp+1, x+nsamps_from_ctr), flash_ctr_is)
+    flash_cyc = ImagineInterface.gen_pulses(nsamps_cyc, flash_ivs)
+    cam_cyc = ImagineInterface.gen_pulses(nsamps_cyc, exp_ivs)
 
     return flash_cyc, cam_cyc
 end

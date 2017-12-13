@@ -1,6 +1,6 @@
 module ImagineAnalyses
 
-using AxisArrays, Interpolations, Unitful
+using AxisArrays, Interpolations, Unitful, IntervalSets
 using Reexport
 @reexport using CachedCalls, ImagineInterface, UnitAliases
 
@@ -11,9 +11,15 @@ import Unitful:s
 export dumb_bench,
         get_cycles,
         largest_cycle_diff,
+        largest_cycle_std,
+        mean_cycle,
 
         find_circular,
-        get_circular
+        get_circular,
+        mon_delay,
+        pulse_timings,
+        flash_cam_cycs
+
 
 #This will be a bit of a hodgepodge of analyses one can do on ImagineSignals and acquired images.  May be worth organizing differently if it gets too big.
 
