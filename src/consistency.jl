@@ -22,23 +22,24 @@ largest_cycle_std(a::T) where {T<:AbstractMatrix} = std(a, 2)
 largest_cycle_std(sig::ImagineSignal, cycle_dur::HasTimeUnits; ignore_n::Int=0) = largest_cycle_std(get_samples(sig), cycle_dur; ignore_n=ignore_n)
 
 #Reshape a periodic 1D signal into a matrix with sample index on the first axis and cycle index on the second
-get_cycles(sig::ImagineSignal, cycle_dur) = get_cycles(get_samples(sig), cycle_dur)
+get_cycles(sig::ImagineSignal, cycle_dur; delay::HasTimeUnits = 0.0s) = get_cycles(get_samples(sig), cycle_dur; delay = delay)
 
 isapprox_int(x) = isapprox(round(Int, x), x)
 
-function get_cycles(a::AxisArray{T,1,D,Ax}, cycle_dur::HasTimeUnits) where {T,D,Ax}
-    nsamps = cycle_dur/step(axisvalues(a)[1])
+function get_cycles(a::AxisArray{T,1,D,Ax}, cycle_dur::HasTimeUnits; delay::HasTimeUnits = 0.0s) where {T,D,Ax}
+    samp_dur = step(axisvalues(a)[1])
+    nsamps = cycle_dur/samp_dur
     if isapprox_int(nsamps)
         nsamps = round(Int,nsamps) #special case
     end
-    get_cycles(a.data, nsamps)
+    get_cycles(a.data, nsamps; delay_nsamps = round(Int, delay/samp_dur))
 end
 
 #general case (allocates new array)
 #interpolates new cycle vector to honor the cycle time
 #if input vector doesn't contain a whole number of cycles then omit a partial cycle at the end
-function get_cycles(a::T, cycle_nsamps::Float64) where {T<:AbstractVector}
-    la = length(a)
+function get_cycles(a::T, cycle_nsamps::Float64; delay_nsamps::Int = 0) where {T<:AbstractVector}
+    la = length(a) - delay_nsamps
     if la < cycle_nsamps
         error("Insufficient sample count for the specified cycle time")
     end
@@ -54,7 +55,7 @@ function get_cycles(a::T, cycle_nsamps::Float64) where {T<:AbstractVector}
     step_size = cycle_nsamps/nsamps_interp
     for i = 1:ncycs
         #output[:,i] = a_itp[linspace(1+(i-1)*cycle_nsamps, i*cycle_nsamps, nsamps_interp)] #not sure why this fails for certain float ranges
-        cyc_inds = linspace(1+(i-1)*cycle_nsamps, i*cycle_nsamps, nsamps_interp)
+        cyc_inds = linspace(delay_nsamps+1+1+(i-1)*cycle_nsamps, i*cycle_nsamps, nsamps_interp)
         for (ii,ival) in enumerate(cyc_inds)
             output[ii,i] = a_itp[ival] 
         end
@@ -63,13 +64,13 @@ function get_cycles(a::T, cycle_nsamps::Float64) where {T<:AbstractVector}
 end
 
 #special case (in-place reshape)
-function get_cycles(a::T, cycle_nsamps::Int) where {T<:AbstractVector}
-    la = length(a)
+function get_cycles(a::T, cycle_nsamps::Int; delay_nsamps::Int = 0) where {T<:AbstractVector}
+    la = length(a) - delay_nsamps
     d, r = divrem(la, cycle_nsamps)
     if la < cycle_nsamps
         error("Insufficient sample count for the specified cycle time")
     elseif r > 0
-        a = view(a, 1:d*cycle_nsamps)
+        a = view(a, (delay_nsamps+1):d*cycle_nsamps)
     end
     return reshape(a, cycle_nsamps, d)
 end

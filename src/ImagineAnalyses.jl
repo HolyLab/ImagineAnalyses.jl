@@ -1,11 +1,12 @@
 module ImagineAnalyses
 
-using AxisArrays, Interpolations
+using AxisArrays, Interpolations, Unitful
 using Reexport
 @reexport using CachedCalls, ImagineInterface, UnitAliases
 
 import UnitAliases.HasTimeUnits
 import CachedCalls.CachedCall
+import Unitful:s
 
 export dumb_bench,
         get_cycles,
