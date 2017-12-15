@@ -78,9 +78,13 @@ end
 #We do this so that we know when the MON signal reaches its minimum
 #indmax(xcorr(a,b)) is displaced from the center of the xcorr vector by the amount that b would need to be shifted to align with a
 function mon_delay(mod_cyc, mon_cyc)
-    xc = xcorr(ustrip.(mon_cyc), ustrip.(mod_cyc))
+    xc = xcorr(repmat(ustrip.(mon_cyc), 5), repmat(ustrip.(mod_cyc), 5)) #replicate it so that edges don't corrupt results
     ctr_i = div(length(xc),2)+1
-    return indmax(xc) - ctr_i #amount that mod_cyc needs to be shifted to align with mon_cyc (should be positive)
+    offset = div(ctr_i,2)
+    inner_half = xc[offset+1:(length(xc)-offset)]
+    #amount that mod_cyc needs to be shifted to align with mon_cyc (should be positive)
+    #we examine only the inner half of shifts because we don't want to shift more than a half cycle
+    return (indmax(inner_half) + offset) - ctr_i
 end
 
 #Returns a set of indices marking when the mon signal crosses the values in the crossings vector.
