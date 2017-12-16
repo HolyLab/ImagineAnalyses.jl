@@ -78,13 +78,13 @@ end
 #We do this so that we know when the MON signal reaches its minimum
 #indmax(xcorr(a,b)) is displaced from the center of the xcorr vector by the amount that b would need to be shifted to align with a
 function mon_delay(mod_cyc, mon_cyc)
-    xc = xcorr(repmat(ustrip.(mon_cyc), 5), repmat(ustrip.(mod_cyc), 5)) #replicate it so that edges don't corrupt results
+    xc = xcorr(repmat(ustrip.(mon_cyc), 3), ustrip.(mod_cyc)) #replicate it so that edges don't corrupt results
     ctr_i = div(length(xc),2)+1
-    offset = div(ctr_i,2)
-    inner_half = xc[offset+1:(length(xc)-offset)]
+    half_window_sz = div(length(mon_cyc),4)
+    inner_half = xc[(ctr_i-half_window_sz):(ctr_i+half_window_sz)]
     #amount that mod_cyc needs to be shifted to align with mon_cyc (should be positive)
     #we examine only the inner half of shifts because we don't want to shift more than a half cycle
-    return (indmax(inner_half) + offset) - ctr_i
+    return indmax(inner_half) - (div(length(inner_half),2) + 1)
 end
 
 #Returns a set of indices marking when the mon signal crosses the values in the crossings vector.
@@ -93,22 +93,14 @@ end
 function pulse_timings(mod_cyc::AbstractVector, mon_cyc::AbstractVector, targets::AbstractVector, pad_nsamps::Int)
     @assert length(mod_cyc) == length(mon_cyc)
     nsamps_cycle = length(mod_cyc)
-    shft = mon_delay(ustrip.(mod_cyc), ustrip.(mon_cyc))
-    mon_aligned = circshift(mon_cyc, -shft)
-    mon_idxs = find_circular(mon_aligned, targets, pad_nsamps)
+    mon_idxs = find_circular(mon_cyc, targets, pad_nsamps)
     @assert all(map(length, mon_idxs).==2) #should have exactly two crossings for each target with a cyclical waveform
-    for i = 1:length(mon_idxs)
-        mon_idxs[i] .+= shft
-    end
-    nover = length(find(x->x>nsamps_cycle, mon_idxs[1]))
-    nover += length(find(x->x>nsamps_cycle, mon_idxs[2]))
-    if nover >0
-        error("TODO: handle this situation")
-    end
     return mon_idxs
 end
 
 function flash_cam_cycs(mod_cyc::AbstractVector, mon_cyc::AbstractVector, slice_zs, pad_nsamps::Int, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits; is_bidi = true)
+    @show offset = mon_delay(ustrip.(mod_cyc), ustrip.(mon_cyc))
+    mon_cyc = circshift(mon_cyc, -offset)
     @assert flash_time <= exp_time
     flash_ctr_is = pulse_timings(mod_cyc, mon_cyc, slice_zs, pad_nsamps)
     flash_ctr_fwd = [x[1] for x in flash_ctr_is]
@@ -118,16 +110,16 @@ function flash_cam_cycs(mod_cyc::AbstractVector, mon_cyc::AbstractVector, slice_
     else
         flash_ctr_is = flash_ctr_fwd
     end
-    flash_cam_cycs(flash_ctr_is, flash_time, exp_time, sample_rate, length(mon_cyc))
+    flash_cam_cycs(flash_ctr_is, flash_time, exp_time, sample_rate, length(mon_cyc), offset)
 end
 
-function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits, nsamps_cyc::Int)
+function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits, nsamps_cyc::Int, offset::Int)
     #@assert all(map((x,y) -> isapprox(x, y, rtol = (1/typemax(Int16) * 800μm)), (mean_cyc[flash_ctr_fwd], mean_cyc[flash_ctr_back])))
     min_flash_sep = minimum(diff(flash_ctr_is))
     max_exp_time = ((min_flash_sep-1) / sample_rate) * 0.97
     #@show max_exp_time = (1/stack_rate - (1/samprate(pos) *length(slice_zs))) / length(slice_zs) #leaves one low sample between exposure pulses
     if exp_time >= max_exp_time
-        warn("Could not use the requested exposure time while keeping sufficient separation between exposures.  Using an exposure time of $(max_exp_time) instead.  This means that the maximum framerate required from the camera will be $(100.0 * inv(max_exp_time)/inv(exp_time))% of the requested rate.")
+        warn("Could not use the requested exposure time while keeping sufficient separation between exposures.  Using an exposure time of $(max_exp_time) instead.  This means that the maximum framerate required from the camera will be $(100.0 * inv(max_exp_time)/inv(exp_time))% of the requested rate. (choose the ROI size to meet this requirement)")
         exp_time = max_exp_time
     end
     #now place flashes, centered on the indices above
@@ -143,7 +135,7 @@ function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTim
     flash_cyc = ImagineInterface.gen_pulses(nsamps_cyc, flash_ivs)
     cam_cyc = ImagineInterface.gen_pulses(nsamps_cyc, exp_ivs)
 
-    return flash_cyc, cam_cyc
+    return flash_cyc, cam_cyc, offset
 end
 
 #    samps = get_samples(sig) #assume world units
