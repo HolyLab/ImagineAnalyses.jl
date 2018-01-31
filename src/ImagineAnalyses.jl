@@ -8,7 +8,7 @@ using Reexport
 
 import UnitAliases.HasTimeUnits
 import CachedCalls.CachedCall
-import Unitful:s
+import Unitful: μm, s, Hz
 
 export dumb_bench,
         get_cycles,
@@ -20,7 +20,9 @@ export dumb_bench,
         get_circular,
         mon_delay,
         pulse_timings,
-        flash_cam_cycs
+        flash_cam_cycs,
+        max_exp,
+        framerate_efficiency
 
 
 #This will be a bit of a hodgepodge of analyses one can do on ImagineSignals and acquired images.  May be worth organizing differently if it gets too big.

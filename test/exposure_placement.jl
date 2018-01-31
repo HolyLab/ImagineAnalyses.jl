@@ -87,3 +87,23 @@ end
 
 #function cam_flash_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits)
 
+v = [1.0:1.0:10.0...;9.0:-1.0:2.0...]*Unitful.μm
+zs = [2.0; 4.0; 6.0] * Unitful.μm
+sr = 1.0Hz
+
+@test max_exp(v, sr, zs) == 1.0s
+eff = framerate_efficiency(v, sr, zs)
+@test eff == 1.0
+@test framerate_efficiency(v, sr) == 1.0 #version that doesn't consider slice locations (worst case)
+
+zs = [2.0; 5.0] * Unitful.μm #last slice is limiting
+@test max_exp(v, sr, zs) == 1.0s
+eff = framerate_efficiency(v, sr, zs)
+@test eff == 1.0
+
+v = [1.0;3.0;5.0;6.0:10.0...;9.0:-1.0:2.0...]*Unitful.μm #nonlinear in the beginning of the forward sweep
+zs = [3.0; 6.0] * Unitful.μm #max exp should be 2.0 in the linear case, 1.0 due to nonlinearity: efficiency of 0.5
+@test max_exp(v, sr, zs) == 1.0s
+eff = framerate_efficiency(v, sr, zs)
+@test eff == 0.5
+

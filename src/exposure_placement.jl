@@ -99,7 +99,7 @@ function pulse_timings(mod_cyc::AbstractVector, mon_cyc::AbstractVector, targets
 end
 
 function flash_cam_cycs(mod_cyc::AbstractVector, mon_cyc::AbstractVector, slice_zs, pad_nsamps::Int, flash_time::HasTimeUnits, exp_time::HasTimeUnits, sample_rate::HasInverseTimeUnits; is_bidi = true)
-    @show offset = mon_delay(ustrip.(mod_cyc), ustrip.(mon_cyc))
+    offset = mon_delay(ustrip.(mod_cyc), ustrip.(mon_cyc))
     mon_cyc = circshift(mon_cyc, -offset)
     @assert flash_time <= exp_time
     flash_ctr_is = pulse_timings(mod_cyc, mon_cyc, slice_zs, pad_nsamps)
@@ -125,7 +125,7 @@ function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTim
     #now place flashes, centered on the indices above
     nsamps_flash = ImagineInterface.calc_num_samps(flash_time, sample_rate)
     if iseven(nsamps_flash)
-	nsamps_flash -= 1 #force odd so that fwd and reverse flashes line up in bidi recordings
+	    nsamps_flash -= 1 #force odd so that fwd and reverse flashes line up in bidi recordings
     end
     nsamps_from_ctr = div(nsamps_flash,2)
     flash_ivs = map(x-> ClosedInterval(x-nsamps_from_ctr, x+nsamps_from_ctr), flash_ctr_is)
@@ -138,13 +138,44 @@ function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTim
     return flash_cyc, cam_cyc, offset
 end
 
-#    samps = get_samples(sig) #assume world units
-#    cyc_mean = mean_cycle(samps, nsamps_cycle; start_idx = start_idx)
-#    samps_used = view(samps, rng_analyzed)
-#    cyc_mean = mean_cycle(samps_used, nsamps_cycle)
-#    if unit(cyc_mean[1]) != unit(circ_list[1])
-#        error("Units of signal and crossing list do not match")
-#    end
-#    cross_idxs = find_circular(cyc_mean, circ_list, pad_nsamps)
-#    cross_idxs .+= (start_idx-1)
-#    return cross_idxs
+#empirical max acceleration
+max_acc(v, sr) = maximum(abs.(upreferred.(diff(diff(v)./(1/sr))./(1/sr))))
+max_vel(v, sr) = maximum(abs.(upreferred.(diff(v)./(1/sr))))
+
+#Returns a triangle wave equivalent to the input (same max, min, freq), useful for comparisons
+function eq_triangle(v, sr::HasInverseTimeUnits)
+	mx = maximum(v)
+	mn = minimum(v)
+	freq = upreferred(sr/length(v))
+	fwd, bck = ImagineInterface.gen_bidi_pos(mn, mx, upreferred(1/(2.0*freq)), sr)
+	return vcat(fwd,bck)
+end
+
+#calculate the fraction of the camera's max framerate that can be utilized with the given sample vector
+#by comparing the maximum velocity reached with the ideal constant velocity of a triangle wave
+function framerate_efficiency(v, sr::HasInverseTimeUnits)
+	tri = eq_triangle(v, sr)
+	vin = max_vel(v,sr)
+	vtri = max_vel(tri,sr)
+	return upreferred(vtri/vin)	
+end
+
+#calculate the fraction of the camera's max framerate that can be utilized with the given sample vector and slice locations
+#This version is more practical than above (above is more of a worst-case efficiency)
+function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs)
+    mexp = max_exp(v,sr,slice_zs)
+	tri = eq_triangle(v, sr)
+    mexp_tri = max_exp(tri, sr, slice_zs)
+    @assert eltype(v) == eltype(slice_zs)
+    return upreferred(mexp/mexp_tri)
+end
+
+#calculate longest exposure time possible given sample vector v
+function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.001s, sr))
+    timings = ImagineAnalyses.find_circular(v, slice_zs, pad_nsamps)
+    fwdt = [x[1] for x in timings]
+    bckt = reverse([x[2] for x in timings])
+    diffi = minimum(diff(vcat(fwdt, bckt))) - 1 #subtract one because we need a sample between exposures (to send TTL down)
+    diffi = min(diffi, first(fwdt)+(length(v)-last(bckt)) - 1) #handle first/last timing
+    return upreferred(diffi / sr)
+end
