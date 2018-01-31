@@ -56,7 +56,7 @@ for i=1:length(targets)
     @test all(mon_cyc[pt[i]].==targets[i])
 end
 
-flash_cyc, cam_cyc = flash_cam_cycs(mod_cyc, mon_cyc, targets, pad_nsamps, 0.05s, 0.1s, 20.0Hz; is_bidi = true)
+flash_cyc, cam_cyc, offset = flash_cam_cycs(mod_cyc, mon_cyc, targets, pad_nsamps, 0.05s, 0.1s, 20.0Hz; is_bidi = true)
 @test length(find(flash_cyc)) == sum([length(x) for x in pt])
 @test length(find(cam_cyc)) == sum([length(x) for x in pt]) * 2
 for i=1:length(targets)
@@ -72,7 +72,10 @@ pt = pulse_timings(mod_cyc, mon_cyc, targets, pad_nsamps)
 for i=1:length(targets)
     @test all(mon_cyc[pt[i]].==targets[i])
 end
-flash_cyc, cam_cyc = flash_cam_cycs(mod_cyc, mon_cyc, targets, pad_nsamps, 0.05s, 0.1s, 20.0Hz; is_bidi = true)
+flash_cyc, cam_cyc, offset = flash_cam_cycs(mod_cyc, mon_cyc, targets, pad_nsamps, 0.05s, 0.1s, 20.0Hz; is_bidi = true)
+@test offset == 1
+flash_cyc = circshift(flash_cyc, offset)
+cam_cyc = circshift(cam_cyc, offset)
 @test length(find(flash_cyc)) == sum([length(x) for x in pt])
 @test length(find(cam_cyc)) == sum([length(x) for x in pt]) * 2
 for i=1:length(targets)
