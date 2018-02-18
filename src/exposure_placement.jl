@@ -171,10 +171,15 @@ function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs)
 end
 
 #calculate longest exposure time possible given sample vector v
-function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.001s, sr))
+#Also considers temporal offsets that have been found empirically (toffsets_fwd and toffsets_bck keyword args)
+function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.001s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck = fill(0.0s,length(slice_zs)))
     timings = ImagineAnalyses.find_circular(v, slice_zs, pad_nsamps)
     fwdt = [x[1] for x in timings]
     bckt = reverse([x[2] for x in timings])
+    toffsets_fwd_nsamps = map(x->ImagineInterface.calc_num_samps(x, sr), toffsets_fwd)
+    toffsets_bck_nsamps = map(x->ImagineInterface.calc_num_samps(x, sr), toffsets_bck)
+    fwdt = fwdt.+toffsets_fwd_nsamps
+    bckt = bckt.+toffsets_bck_nsamps
     diffi = minimum(diff(vcat(fwdt, bckt))) - 1 #subtract one because we need a sample between exposures (to send TTL down)
     diffi = min(diffi, first(fwdt)+(length(v)-last(bckt)) - 1) #handle first/last timing
     return upreferred(diffi / sr)
