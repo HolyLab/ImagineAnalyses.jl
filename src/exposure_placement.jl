@@ -162,8 +162,8 @@ end
 
 #calculate the fraction of the camera's max framerate that can be utilized with the given sample vector and slice locations
 #This version is more practical than above (above is more of a worst-case efficiency)
-function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs)
-    mexp = max_exp(v,sr,slice_zs)
+function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs; toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck=fill(0.0s, length(slice_zs)))
+    mexp = max_exp(v,sr,slice_zs; toffsets_fwd=toffsets_fwd, toffsets_bck=toffsets_bck)
 	tri = eq_triangle(v, sr)
     mexp_tri = max_exp(tri, sr, slice_zs)
     @assert eltype(v) == eltype(slice_zs)
