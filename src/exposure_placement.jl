@@ -173,6 +173,8 @@ end
 #calculate longest exposure time possible given sample vector v
 #Also considers temporal offsets that have been found empirically (toffsets_fwd and toffsets_bck keyword args)
 function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.001s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck = fill(0.0s,length(slice_zs)))
+    first_idx = indmin(v)
+    v = circshift(v, -first_idx) #assumes slice_zs are sorted and increasing
     timings = ImagineAnalyses.find_circular(v, slice_zs, pad_nsamps)
     fwdt = [x[1] for x in timings]
     bckt = reverse([x[2] for x in timings])
