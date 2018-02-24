@@ -172,7 +172,7 @@ end
 
 #calculate longest exposure time possible given sample vector v
 #Also considers temporal offsets that have been found empirically (toffsets_fwd and toffsets_bck keyword args)
-function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.001s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck = fill(0.0s,length(slice_zs)))
+function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.0005s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck = fill(0.0s,length(slice_zs)))
     first_idx = indmin(v)
     v = circshift(v, -first_idx) #assumes slice_zs are sorted and increasing
     timings = ImagineAnalyses.find_circular(v, slice_zs, pad_nsamps)
@@ -180,8 +180,8 @@ function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInter
     bckt = reverse([x[2] for x in timings])
     toffsets_fwd_nsamps = map(x->ImagineInterface.calc_num_samps(x, sr), toffsets_fwd)
     toffsets_bck_nsamps = map(x->ImagineInterface.calc_num_samps(x, sr), toffsets_bck)
-    fwdt = fwdt.+toffsets_fwd_nsamps
-    bckt = bckt.+toffsets_bck_nsamps
+    fwdt = fwdt.-toffsets_fwd_nsamps
+    bckt = bckt.-reverse(toffsets_bck_nsamps)
     diffi = minimum(diff(vcat(fwdt, bckt))) - 1 #subtract one because we need a sample between exposures (to send TTL down)
     diffi = min(diffi, first(fwdt)+(length(v)-last(bckt)) - 1) #handle first/last timing
     return upreferred(diffi / sr)
