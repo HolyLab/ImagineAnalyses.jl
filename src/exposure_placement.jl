@@ -144,28 +144,28 @@ max_vel(v, sr) = maximum(abs.(upreferred.(diff(v)./(1/sr))))
 
 #Returns a triangle wave equivalent to the input (same max, min, freq), useful for comparisons
 function eq_triangle(v, sr::HasInverseTimeUnits)
-	mx = maximum(v)
-	mn = minimum(v)
-	freq = upreferred(sr/length(v))
-	fwd, bck = ImagineInterface.gen_bidi_pos(mn, mx, upreferred(1/(2.0*freq)), sr)
-	return vcat(fwd,bck)
+    mx = maximum(v)
+    mn = minimum(v)
+    freq = upreferred(sr/length(v))
+    fwd, bck = ImagineInterface.gen_bidi_pos(mn, mx, upreferred(1/(2.0*freq)), sr)
+    return vcat(fwd,bck)
 end
 
 #calculate the fraction of the camera's max framerate that can be utilized with the given sample vector
 #by comparing the maximum velocity reached with the ideal constant velocity of a triangle wave
 function framerate_efficiency(v, sr::HasInverseTimeUnits)
-	tri = eq_triangle(v, sr)
-	vin = max_vel(v,sr)
-	vtri = max_vel(tri,sr)
-	return upreferred(vtri/vin)	
+    tri = eq_triangle(v, sr)
+    vin = max_vel(v,sr)
+    vtri = max_vel(tri,sr)
+    return upreferred(vtri/vin)
 end
 
 #calculate the fraction of the camera's max framerate that can be utilized with the given sample vector and slice locations
 #This version is more practical than above (above is more of a worst-case efficiency)
-function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs; toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck=fill(0.0s, length(slice_zs)))
-    mexp = max_exp(v,sr,slice_zs; toffsets_fwd=toffsets_fwd, toffsets_bck=toffsets_bck)
-	tri = eq_triangle(v, sr)
-    mexp_tri = max_exp(tri, sr, slice_zs)
+function framerate_efficiency(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps=ImagineInterface.calc_num_samps(0.0005s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck=fill(0.0s, length(slice_zs)))
+    mexp = max_exp(v,sr,slice_zs; pad_nsamps=pad_nsamps, toffsets_fwd=toffsets_fwd, toffsets_bck=toffsets_bck)
+    tri = eq_triangle(v, sr)
+    mexp_tri = max_exp(tri, sr, slice_zs; pad_nsamps=2)
     @assert eltype(v) == eltype(slice_zs)
     return upreferred(mexp/mexp_tri)
 end
