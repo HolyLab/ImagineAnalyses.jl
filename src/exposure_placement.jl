@@ -19,7 +19,7 @@ function find_circular(samps::AbstractVector, circ_list::AbstractVector, pad_nsa
     if (is_incr && (samp1 > circ_list[1])) || (!is_incr && (samp1 < circ_list[end]))
         error("The sample vector begins in the middle of a cycle")
     end
-    outputs = Vector{Vector{Int}}(length(circ_list))
+    outputs = Vector{Vector{Int}}(undef, length(circ_list))
     for i = 1:length(circ_list)
         outputs[i] = Int[]
     end
@@ -65,26 +65,26 @@ function mean_cycle(samps::AbstractVector, nsamps_cycle::Int; start_idx = 1)
     rng_analyzed = start_idx:lsamps
     samps_used = view(samps, rng_analyzed)
     if mod(length(samps_used), nsamps_cycle) != 0
-        warn("Found a fractional number of cycles.  Truncating to analyze a whole number of cycles.")
+        @warn "Found a fractional number of cycles.  Truncating to analyze a whole number of cycles."
         rng_analyzed = start_idx:start_idx+(nsamps_cycle*div(length(rng_analyzed),nsamps_cycle)-1)
         samps_used = view(samps, rng_analyzed)
     end
     cyc_mat = get_cycles(samps_used, nsamps_cycle)
     print("Averaging $(size(cyc_mat,2)) cycles...\n")
-    return reshape(mean(ustrip.(cyc_mat), 2), nsamps_cycle)  * unit(samps[1]) #work around limitation of mean function with Unitful Quantities
+    return reshape(mean(ustrip.(cyc_mat), dims=2), nsamps_cycle)  * unit(samps[1]) #work around limitation of mean function with Unitful Quantities
 end
 
 #find integer sample shift to align mod and mon.  (Even with calibration there is often a phase delay between the MOD and MON signal)
 #We do this so that we know when the MON signal reaches its minimum
 #indmax(xcorr(a,b)) is displaced from the center of the xcorr vector by the amount that b would need to be shifted to align with a
 function mon_delay(mod_cyc, mon_cyc)
-    xc = xcorr(repmat(ustrip.(mon_cyc), 3), ustrip.(mod_cyc)) #replicate it so that edges don't corrupt results
+    xc = xcorr(repeat(ustrip.(mon_cyc), 3), ustrip.(mod_cyc)) #replicate it so that edges don't corrupt results
     ctr_i = div(length(xc),2)+1
     half_window_sz = div(length(mon_cyc),4)
     inner_half = xc[(ctr_i-half_window_sz):(ctr_i+half_window_sz)]
     #amount that mod_cyc needs to be shifted to align with mon_cyc (should be positive)
     #we examine only the inner half of shifts because we don't want to shift more than a half cycle
-    return indmax(inner_half) - (div(length(inner_half),2) + 1)
+    return argmax(inner_half) - (div(length(inner_half),2) + 1)
 end
 
 #Returns a set of indices marking when the mon signal crosses the values in the crossings vector.
@@ -119,7 +119,7 @@ function flash_cam_cycs(flash_ctr_is, flash_time::HasTimeUnits, exp_time::HasTim
     max_exp_time = ((min_flash_sep-1) / sample_rate) * 0.97
     #@show max_exp_time = (1/stack_rate - (1/samprate(pos) *length(slice_zs))) / length(slice_zs) #leaves one low sample between exposure pulses
     if exp_time >= max_exp_time
-        warn("Could not use the requested exposure time while keeping sufficient separation between exposures.  Using an exposure time of $(max_exp_time) instead.  This means that the maximum framerate required from the camera will be $(100.0 * inv(max_exp_time)/inv(exp_time))% of the requested rate. (choose the ROI size to meet this requirement)")
+        @warn "Could not use the requested exposure time while keeping sufficient separation between exposures.  Using an exposure time of $(max_exp_time) instead.  This means that the maximum framerate required from the camera will be $(100.0 * inv(max_exp_time)/inv(exp_time))% of the requested rate. (choose the ROI size to meet this requirement)"
         exp_time = max_exp_time
     end
     #now place flashes, centered on the indices above
@@ -173,7 +173,7 @@ end
 #calculate longest exposure time possible given sample vector v
 #Also considers temporal offsets that have been found empirically (toffsets_fwd and toffsets_bck keyword args)
 function max_exp(v, sr::HasInverseTimeUnits, slice_zs; pad_nsamps = ImagineInterface.calc_num_samps(0.0005s, sr), toffsets_fwd=fill(0.0s, length(slice_zs)), toffsets_bck = fill(0.0s,length(slice_zs)))
-    first_idx = indmin(v)
+    first_idx = argmin(v)
     v = circshift(v, -first_idx) #assumes slice_zs are sorted and increasing
     timings = ImagineAnalyses.find_circular(v, slice_zs, pad_nsamps)
     fwdt = [x[1] for x in timings]
