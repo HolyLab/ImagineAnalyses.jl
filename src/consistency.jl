@@ -9,7 +9,7 @@ function largest_cycle_diff(a::T, cycle_dur::Union{Int, HasTimeUnits}, delay_cyc
     largest_cycle_diff(view(cyc_mat, :, ignore_ncycs+1:size(cyc_mat,2)))
 end
 
-largest_cycle_diff(a::T) where {T<:AbstractMatrix} = maximum(a, 2) .- minimum(a,2)
+largest_cycle_diff(a::T) where {T<:AbstractMatrix} = maximum(a, dims=2) .- minimum(a, dims=2)
 largest_cycle_diff(sig::ImagineSignal, cycle_dur, delay_cyc1::Int; ignore_ncycs::Int=0) = largest_cycle_diff(get_samples(sig), cycle_dur, delay_cyc1; ignore_ncycs=ignore_ncycs)
 largest_cycle_diff(sig::ImagineSignal, cycle_dur, delay_cyc1::HasTimeUnits; ignore_ncycs::Int=0) = largest_cycle_diff(get_samples(sig), cycle_dur, ImagineInterface.calc_num_samps(delay_cyc1, samprate(sig)); ignore_ncycs=ignore_ncycs)
 largest_cycle_diff(sig::ImagineSignal, cycle_dur; ignore_ncycs::Int=0) = largest_cycle_diff(get_samples(sig), cycle_dur, 0; ignore_ncycs=ignore_ncycs)
@@ -59,13 +59,13 @@ function get_cycles(a::T, cycle_nsamps::Float64, delay_nsamps::Int = 0) where {T
     end
     nsamps_interp = ceil(Int, cycle_nsamps)
     output = zeros(eltype(a), nsamps_interp, ncycs)
-    a_itp = interpolate(a, BSpline(Linear()), OnGrid())
+    a_itp = extrapolate(interpolate(a, BSpline(Linear())), Flat())
     step_size = cycle_nsamps/nsamps_interp
     for i = 1:ncycs
         #output[:,i] = a_itp[linspace(1+(i-1)*cycle_nsamps, i*cycle_nsamps, nsamps_interp)] #not sure why this fails for certain float ranges
-        cyc_inds = linspace(delay_nsamps+1+1+(i-1)*cycle_nsamps, i*cycle_nsamps, nsamps_interp)
+        cyc_inds = range(delay_nsamps+1+1+(i-1)*cycle_nsamps, stop=i*cycle_nsamps, length=nsamps_interp)
         for (ii,ival) in enumerate(cyc_inds)
-            output[ii,i] = a_itp[ival] 
+            output[ii,i] = a_itp(ival)
         end
     end
     return output

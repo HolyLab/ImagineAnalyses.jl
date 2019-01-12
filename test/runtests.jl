@@ -1,5 +1,5 @@
 using ImagineAnalyses
-using Base.Test
+using Test
 
 include("consistency.jl")
 include("exposure_placement.jl")

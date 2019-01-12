@@ -9,6 +9,8 @@ using Reexport
 import UnitAliases.HasTimeUnits
 import CachedCalls.CachedCall
 import Unitful: μm, s, Hz
+using DSP
+using Statistics
 
 export dumb_bench,
         get_cycles,
@@ -31,7 +33,7 @@ export dumb_bench,
 dumb_bench(sig1::ImagineSignal, sig2::ImagineSignal) = 0.0
 
 #Define new constructors for CachedCalls on a per-function basis when the return type is known (warning: risky when function isn't type stable)
-CachedCall(f::typeof(dumb_bench), args...) = CachedCall("dumb benchmark", f, (args...), Float64)
+CachedCall(f::typeof(dumb_bench), args...) = CachedCall("dumb benchmark", f, (args...,), Float64)
 
 include("consistency.jl")
 include("exposure_placement.jl")
