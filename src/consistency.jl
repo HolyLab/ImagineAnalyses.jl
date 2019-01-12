@@ -1,6 +1,3 @@
-using ImagineAnalyses
-using Base.Test
-
 #for measuring consistency of a periodic 1d timeseries
 #returns a sample vector one cycle in duration where each sample is equal to the largest absolue difference measured between pairs of corresponding samples
 #can choose to ignore the first ignore_ncycs cycles
