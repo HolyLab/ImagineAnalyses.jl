@@ -1,6 +1,6 @@
 name = "ImagineAnalyses"
 uuid = "d514a27a-15fd-11e9-2877-55d10791f35b"
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
